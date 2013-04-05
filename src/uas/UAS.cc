@@ -1255,13 +1255,26 @@ void UAS::receiveMessage(LinkInterface* link, mavlink_message_t message)
             break;
 
 #endif
-            // Messages to ignore
+        case MAVLINK_MSG_ID_DISCRETE_RADAR:
+        {
+            mavlink_discrete_radar_t discreteRadar;
+            mavlink_msg_discrete_radar_decode(&message, &discreteRadar);
+            QVector<int16_t> distances;
+
+            for (int i=0; i<MAVLINK_MSG_DISCRETE_RADAR_FIELD_DISTANCES_LEN; ++i)
+                distances << discreteRadar.distances[i];
+            emit discreteRadarChanged(this, distances, discreteRadar.quality, discreteRadar.time_usec);
+        }
+        break;
+
+        // Messages to ignore
         case MAVLINK_MSG_ID_RAW_IMU:
         case MAVLINK_MSG_ID_SCALED_IMU:
         case MAVLINK_MSG_ID_NAV_CONTROLLER_OUTPUT:
         case MAVLINK_MSG_ID_RAW_PRESSURE:
         case MAVLINK_MSG_ID_SCALED_PRESSURE:
         case MAVLINK_MSG_ID_OPTICAL_FLOW:
+        case MAVLINK_MSG_ID_OMNIDIRECTIONAL_FLOW:
         case MAVLINK_MSG_ID_DEBUG_VECT:
         case MAVLINK_MSG_ID_DEBUG:
         case MAVLINK_MSG_ID_NAMED_VALUE_FLOAT:

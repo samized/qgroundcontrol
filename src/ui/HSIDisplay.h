@@ -62,6 +62,7 @@ public slots:
     void updateLocalPosition(UASInterface*, double x, double y, double z, quint64 usec);
     void updateGlobalPosition(UASInterface*, double lat, double lon, double alt, quint64 usec);
     void updateSpeed(UASInterface* uas, double vx, double vy, double vz, quint64 time);
+    void updateDiscreteRadar(UASInterface* uas, QVector<int16_t> distances, int quality, quint64 usec);
     void updatePositionLock(UASInterface* uas, bool lock);
     void updateAttitudeControllerEnabled(bool enabled);
     void updatePositionXYControllerEnabled(bool enabled);
@@ -174,6 +175,9 @@ public slots:
         actionPending = false;
     }
 
+    /** @brief Calcs initial Radar Polygon */
+    QPolygonF calcUnitRadarPolygon();
+
 signals:
     void metricWidthChanged(double width);
 
@@ -200,6 +204,8 @@ protected slots:
     void drawWaypoints(QPainter& painter);
     /** @brief Draw one waypoint */
     void drawWaypoint(QPainter& painter, const QColor& color, float width, const Waypoint *w, const QPointF& p);
+    /** @brief Draw one waypoint */
+    void drawDiscreteRadar(float maxRadius, const QColor& color, QPainter* painter);
     /** @brief Draw the limiting safety area */
     void drawSafetyArea(const QPointF &topLeft, const QPointF &bottomRight,  const QColor &color, QPainter &painter);
     /** @brief Receive mouse clicks */
@@ -340,6 +346,10 @@ protected:
     float uiZSetCoordinate;    ///< Z Setpoint coordinate wanted by the UI
     float uiYawSet;            ///< Yaw Setpoint wanted by the UI
     double metricWidth;        ///< Width the instrument represents in meters (the width of the ground shown by the widget)
+
+    //Radar
+    QPolygonF unitRadar;
+    QVector<int16_t> discreteRadar;
 
     //
     float xCenterPos;         ///< X center of instrument in virtual coordinates

@@ -471,6 +471,8 @@ signals:
     void localPositionChanged(UASInterface*, int component, double x, double y, double z, quint64 usec);
     void globalPositionChanged(UASInterface*, double lat, double lon, double alt, quint64 usec);
     void altitudeChanged(int uasid, double altitude);
+    /** @brief Update the discrete radar distances */
+    void discreteRadarChanged(UASInterface*, QVector<int16_t> distances, int quality, quint64 usec);
     /** @brief Update the status of one satellite used for localization */
     void gpsSatelliteStatusChanged(int uasid, int satid, float azimuth, float direction, float snr, bool used);
     void speedChanged(UASInterface*, double x, double y, double z, quint64 usec);

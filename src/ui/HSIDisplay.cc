@@ -150,7 +150,8 @@ HSIDisplay::HSIDisplay(QWidget *parent) :
     userSetPointSet(false),
     userXYSetPointSet(false),
     userZSetPointSet(false),
-    userYawSetPointSet(false)
+    userYawSetPointSet(false),
+    discreteRadar(32)
 {
     refreshTimer->setInterval(updateInterval);
 
@@ -179,6 +180,9 @@ HSIDisplay::HSIDisplay(QWidget *parent) :
     statusClearTimer.start(3000);
 
     setFocusPolicy(Qt::StrongFocus);
+
+    // init Radar
+    unitRadar = calcUnitRadarPolygon();
 }
 
 HSIDisplay::~HSIDisplay()
@@ -216,6 +220,26 @@ void HSIDisplay::resetMAVState()
     // Setpoints
     positionSetPointKnown = false;
     setPointKnown = false;
+}
+
+QPolygonF HSIDisplay::calcUnitRadarPolygon()
+{
+    static const float angles[32] = { 4.71238899f, 4.51603937f, 4.31968975f,4.12334061f, 3.92699075f,
+                                      3.73064137f, 3.53429174f, 3.33794212f, 3.1415925f, 2.94524312f,
+                                      2.7488935f, 2.55254388f, 2.3561945f, 2.15984511f, 1.96349549f,
+                                      1.76714587f, 1.57079637f, 1.37444687f, 1.17809725f, 0.981747746f,
+                                      0.785398185f, 0.589048624f, 0.392699093f, 0.196349546f, 0.0F,
+                                      6.08683586f, 5.89048624f, 5.69413662f, 5.49778748f, 5.30143785f,
+                                      5.10508823f, 4.90873861f
+                                    };
+
+    QPolygonF unit_radar(32);
+
+    for (int i = 0; i < 32; i++) {
+        unit_radar.replace(i, QPointF(cos(angles[i]), -sin(angles[i])));
+    }
+
+    return unit_radar;
 }
 
 void HSIDisplay::paintEvent(QPaintEvent * event)
@@ -312,6 +336,10 @@ void HSIDisplay::renderOverlay()
 
     // ----------------------
 
+    // Draw radar
+    QColor radarColor(200, 20, 20);
+    drawDiscreteRadar(baseRadius, radarColor, &painter);
+
     // Draw satellites
     drawGPS(painter);
 
@@ -324,7 +352,6 @@ void HSIDisplay::renderOverlay()
     // Draw attitude
     QColor attitudeColor(200, 20, 20);
     drawAttitudeDirection(xCenterPos, yCenterPos, baseRadius, attitudeColor, &painter);
-
 
     // Draw position setpoints in body coordinates
 
@@ -858,9 +885,10 @@ void HSIDisplay::setActiveUAS(UASInterface* uas)
         disconnect(this->uas, SIGNAL(globalPositionChanged(UASInterface*,double,double,double,quint64)), this, SLOT(updateGlobalPosition(UASInterface*,double,double,double,quint64)));
         disconnect(this->uas, SIGNAL(attitudeThrustSetPointChanged(UASInterface*,double,double,double,double,quint64)), this, SLOT(updateAttitudeSetpoints(UASInterface*,double,double,double,double,quint64)));
         disconnect(this->uas, SIGNAL(positionSetPointsChanged(int,float,float,float,float,quint64)), this, SLOT(updatePositionSetpoints(int,float,float,float,float,quint64)));
-        disconnect(uas, SIGNAL(userPositionSetPointsChanged(int,float,float,float,float)), this, SLOT(updateUserPositionSetpoints(int,float,float,float,float)));
+        disconnect(this->uas, SIGNAL(userPositionSetPointsChanged(int,float,float,float,float)), this, SLOT(updateUserPositionSetpoints(int,float,float,float,float)));
         disconnect(this->uas, SIGNAL(speedChanged(UASInterface*,double,double,double,quint64)), this, SLOT(updateSpeed(UASInterface*,double,double,double,quint64)));
         disconnect(this->uas, SIGNAL(attitudeChanged(UASInterface*,double,double,double,quint64)), this, SLOT(updateAttitude(UASInterface*,double,double,double,quint64)));
+        disconnect(this->uas, SIGNAL(discreteRadarChanged(UASInterface*,QVector<int16_t>,int,quint64)), this, SLOT(updateDiscreteRadar(UASInterface*,QVector<int16_t>,int,quint64)));
 
         disconnect(this->uas, SIGNAL(attitudeControlEnabled(bool)), this, SLOT(updateAttitudeControllerEnabled(bool)));
         disconnect(this->uas, SIGNAL(positionXYControlEnabled(bool)), this, SLOT(updatePositionXYControllerEnabled(bool)));
@@ -892,6 +920,7 @@ void HSIDisplay::setActiveUAS(UASInterface* uas)
     connect(uas, SIGNAL(userPositionSetPointsChanged(int,float,float,float,float)), this, SLOT(updateUserPositionSetpoints(int,float,float,float,float)));
     connect(uas, SIGNAL(speedChanged(UASInterface*,double,double,double,quint64)), this, SLOT(updateSpeed(UASInterface*,double,double,double,quint64)));
     connect(uas, SIGNAL(attitudeChanged(UASInterface*,double,double,double,quint64)), this, SLOT(updateAttitude(UASInterface*,double,double,double,quint64)));
+    connect(uas, SIGNAL(discreteRadarChanged(UASInterface*,QVector<int16_t>,int,quint64)), this, SLOT(updateDiscreteRadar(UASInterface*,QVector<int16_t>,int,quint64)));
 
     connect(uas, SIGNAL(attitudeControlEnabled(bool)), this, SLOT(updateAttitudeControllerEnabled(bool)));
     connect(uas, SIGNAL(positionXYControlEnabled(bool)), this, SLOT(updatePositionXYControllerEnabled(bool)));
@@ -927,6 +956,14 @@ void HSIDisplay::updateSpeed(UASInterface* uas, double vx, double vy, double vz,
     this->vy = vy;
     this->vz = vz;
     this->speed = sqrt(pow(vx, 2.0) + pow(vy, 2.0) + pow(vz, 2.0));
+}
+
+void HSIDisplay::updateDiscreteRadar(UASInterface* uas, QVector<int16_t> distances, int quality, quint64 usec)
+{
+    Q_UNUSED(uas);
+    Q_UNUSED(usec);
+    Q_UNUSED(quality);
+    this->discreteRadar = distances;
 }
 
 void HSIDisplay::setBodySetpointCoordinateXY(double x, double y)
@@ -1459,6 +1496,26 @@ void HSIDisplay::drawAltitudeSetpoint(float xRef, float yRef, float radius, cons
         //    label.sprintf("%05.1f", value);
         //    paintText(label, color, 4.5f, xRef-7.5f, yRef-2.0f, painter);
     }
+}
+
+void HSIDisplay::drawDiscreteRadar(float maxRadius, const QColor& color, QPainter* painter)
+{
+    // Draw the radar
+    QPolygonF p(32);
+
+    // Translate polar to cartesian
+    for (int i = 0; i<32; i++)
+    {
+        float scale = (((float) discreteRadar.at(i)) / 5000.0f) * maxRadius;
+        p.replace(i, QPointF(xCenterPos + unitRadar.at(i).x() * scale, yCenterPos + unitRadar.at(i).y() * scale));
+    }
+
+    QPen pen(color);
+    pen.setWidthF(refLineWidthToPen(1.6f));
+    pen.setColor(color);
+    painter->setPen(pen);
+    painter->setBrush(Qt::NoBrush);
+    drawPolygon(p, painter);
 }
 
 void HSIDisplay::wheelEvent(QWheelEvent* event)
